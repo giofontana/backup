@@ -1,0 +1,45 @@
+---
+- name: Backup folders to NFS
+  hosts: all
+  become: yes
+  vars:
+    mount_point: "/mnt/backup_nfs"
+
+  tasks:
+
+    - name: Ensure NFS utils are installed
+      package:
+        name: nfs-utils
+        state: present
+
+    - name: Create mount point directory
+      file:
+        path: "{{ mount_point }}"
+        state: directory
+
+    - name: Mount the NFS destination
+      mount:
+        path: "{{ mount_point }}"
+        src: "{{ bkp_destination }}"
+        fstype: nfs
+        state: mounted
+
+    - name: Ensure backup directory for host exists
+      file:
+        path: "{{ mount_point }}/{{ inventory_hostname }}"
+        state: directory
+
+    - name: Rsync each folder to the mounted NFS backup
+      loop: "{{ folders }}"
+      loop_control:
+        loop_var: folder
+      command: >
+        rsync -a --delete "{{ folder }}/" "{{ mount_point }}/{{ inventory_hostname }}/{{ folder | basename }}/"
+      args:
+        warn: false
+
+    - name: Unmount the NFS destination
+      mount:
+        path: "{{ mount_point }}"
+        state: unmounted
+        fstype: nfs
